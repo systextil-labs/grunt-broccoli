@@ -1,0 +1,8 @@
+body {
+  background-color: green;
+  display: flex;
+
+  &.is-yellow {
+    background-color: yellow;
+  }
+}

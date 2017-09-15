@@ -1,69 +1,108 @@
-# grunt-broccoli [![Build Status](https://travis-ci.org/quandl/grunt-broccoli.svg?branch=master)](https://travis-ci.org/quandl/grunt-broccoli)
+# grunt-broccoli
+[![Build Status](https://travis-ci.org/quandl/grunt-broccoli.svg?branch=master)](https://travis-ci.org/quandl/grunt-broccoli)
 
-Allows you to execute your Broccoli configurations as Grunt tasks. [Broccoli](https://github.com/joliss/broccoli) is an asset pipeline that allows for incremental builds. Broccoli rebuilds individual files instead of the entire project as Grunt watch does. Checkout the [Broccoli Sample App](https://github.com/joliss/broccoli-sample-app).
+[Broccoli](http://broccolijs.com/) is a performant and well maintained build tool that has been blessed by the Ember community. [Grunt](https://gruntjs.com/) is the task manager that we all know and love (you know you still do). They fill their respective niches well, and using them together makes a lot of sense.
 
+This Grunt plugin lets you specify different Broccoli tasks in the same Gruntfile, and then use either the `build`, `watch` or `serve` command with each of them.
 
-## Running your tasks
+## Upgrading from 0.4.2
 
-grunt-broccoli is a multi-task so you must specify a target when running the task.
+The latest version of grunt-broccoli upgrades the Broccoli dependency to ^1.0.0. All previously existing options still remain, but to align better with Grunt convention, they are now specified in the `options` object of your task. This also enables you to specify global options for all Broccoli tasks that can then be overriden for individual tasks.
 
-#### Building to a directory
+For more details, see the [changelog](https://github.com/EmberSherpa/grunt-broccoli/blob/master/CHANGELOG.md).
 
-```bash
-grunt broccoli:{targetName}:build
+## Get started
+
+Install it by running `npm i -D grunt-broccoli`.
+
+We've included a sample Gruntfile configuration below. You can use any name for your targets and then, in the terminal, pass either `build`, `watch` or `serve` as the final command. For instance:
+
+```sh
+grunt broccoli:prod:build
+# or
+grunt broccoli:dev:watch
+# or
+grunt broccoli:inline-config:serve
 ```
 
-#### Watching for changes and re-building to a directory
+```js
+module.exports = function(grunt) {
+  grunt.loadNpmTasks('grunt-broccoli');
 
-```bash
-grunt broccoli:{targetName}:watch
-```
+  grunt.initConfig({
+    broccoli: {
+      dev: {
+        dest: 'public/assets',
+        // These are the default option values. You only have to specify the
+        // properties that you want to change
+        options: {
+          // By default, grunt-broccoli will walk up the directory tree until it
+          // finds a file named "Brocfile.js". But if you specify a custom
+          // path, it will be used "as is". It's also possible to specify a
+          // function that returns a Broccoli node if you prefer to keep your
+          // whole build config in Gruntfile.js
+          config: 'Brocfile.js',
+          // Can be either a string or an object. If a string, it specifies the
+          // value of process.env.BROCCOLI_ENV. If an object, each key and value
+          // will be merged with process.env
+          env: 'development',
+          // Which host to use with the 'serve' task
+          host: '127.0.0.1',
+          // If true, grunt-broccoli will only overwrite the files that
+          // actually have changed after every rebuild. If false, the 'dest'
+          // directory will be removed completely, and then rewritten, after
+          // every rebuild
+          incrementalOverwrite: true,
+          // Which port to use with the 'serve' task
+          port: 4200
+        }
+      },
+      prod: {
+        dest: 'public/assets',
+        options: {
+          env: {
+            BROCCOLI_ENV: 'production'
+          }
+        }
+      },
+      'inline-config': {
+        dest: 'public/assets',
+        options: {
+          // Here's an example of an inlined config. It's identical to what you
+          // would put in a Brocfile, aside from the fact that a Brocfile would
+          // use `module.exports` instead of `return` for the output node
+          config: function() {
+            var Sass = require('broccoli-sass');
+            var PostCSS = require('broccoli-postcss');
+            var Funnel = require('broccoli-funnel');
+            var MergeTrees = require('broccoli-merge-trees');
 
-#### Running the Broccoli server
+            var css = new Sass(['src/scss'], 'site.scss', 'css/site.css');
 
-```bash
-grunt broccoli:{targetName}:serve
-```
+            css = new PostCSS(css, {
+              plugins: [
+                {
+                  module: require('autoprefixer'),
+                  options: { browsers: ['defaults', 'last 4 versions', 'IE 9'] }
+                }
+              ]
+            });
 
-## Configuring your tasks
+            var img = new Funnel('src/img', { destDir: 'img' });
 
-You can configure these settings (see examples below):
-
-`config`: [String or Function]
-If a string, it refers to the location of the Brocfile relative to the current working directory.
-If a function, it expects that the return value is a Broccoli-compatible tree.
-Defaults to 'Brocfile.js'.
-
-`dest`: [String]
-Specifies the output folder. This doesn't affect the `serve` command.
-The `build` and `watch` commands will abort if a `dest` directory is not set.
-
-`host`/`port`: [String]/[Number]
-Specifies the host and port that the Broccoli server runs on. This only affects the `serve` command.
-Defaults to `localhost` and `4200`.
-
-`env`: [String]
-Set the `BROCCOLI_ENV` to use (see [broccoli-env](https://github.com/joliss/broccoli-env)).
-
-## Examples
-
-```javascript
-broccoli: {
-  dist: {
-    dest: 'dist',
-    config: function() {
-      var transpiled = transpileTree('lib');
-      var allFiles = mergeTrees([transpiled, 'vendor']);
-      var concated = concatFiles(allFiles);
-      var uglified = uglifyFiles(concated);
-      return uglified;
+            return new MergeTrees([css, img]);
+          }
+        }
+      }
     }
-  },
+  });
 
-  dev: {
-    dest: 'tmp/tests',
-    config: 'brocfiles/development.js',
-    port: 4201
-  }
-}
+  grunt.registerTask('build', ['broccoli:prod:build']);
+  grunt.registerTask('watch', ['broccoli:dev:watch']);
+  grunt.registerTask('serve', ['broccoli:dev:serve']);
+
+  grunt.registerTask('default', ['watch']);
+};
 ```
+
+For a more exhaustive example of what a `Brocfile.js` might look like, see [broccoli-sample-app](https://github.com/broccolijs/broccoli-sample-app).
